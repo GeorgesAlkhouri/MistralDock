@@ -2,31 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
+
+from mistralai.extra import response_format_from_pydantic_model
+from pydantic import ConfigDict, create_model
 
 
-def metadata_response_format(vocabulary: list[str]) -> dict[str, Any]:
-    """Build Mistral's strict JSON response format from current Paperless tags."""
-    tag_item: dict[str, object] = {"type": "string"}
-    if vocabulary:
-        tag_item["enum"] = vocabulary
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "paperless_document_metadata",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["title", "created", "tags"],
-                "properties": {
-                    "title": {"type": "string", "minLength": 5, "maxLength": 128},
-                    "created": {"type": ["string", "null"], "format": "date"},
-                    "tags": {"type": "array", "uniqueItems": True, "items": tag_item},
-                },
-            },
-        },
-    }
+def metadata_response_format(vocabulary: list[str]) -> Any:
+    """Build an SDK-compatible strict schema from current Paperless tags."""
+    tag_type = str if not vocabulary else Literal.__getitem__(tuple(vocabulary))
+    metadata_model = create_model(
+        "PaperlessDocumentMetadata",
+        __config__=ConfigDict(extra="forbid"),
+        title=(str, ...),
+        created=(str | None, ...),
+        tags=(list[tag_type], ...),
+    )
+    return response_format_from_pydantic_model(metadata_model)
 
 
 def annotation_prompt(vocabulary: list[str]) -> str:
