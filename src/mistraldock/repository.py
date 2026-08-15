@@ -162,6 +162,29 @@ class JobRepository:
             self._session.execute(select(RunRecord).where(RunRecord.document_id == document_id)).scalars().all()
         )
 
+    def list_runs(self, document_id: int) -> list[dict[str, object]]:
+        records = self._session.execute(
+            select(RunRecord)
+            .where(RunRecord.document_id == document_id)
+            .order_by(RunRecord.started_at.desc())
+        ).scalars()
+        return [
+            {
+                "run_id": record.id,
+                "state": record.state,
+                "trigger": record.trigger,
+                "attempt": record.attempt,
+                "started_at": record.started_at.isoformat(),
+                "finished_at": record.finished_at.isoformat() if record.finished_at else None,
+                "applied": record.applied,
+                "error_code": record.error_code,
+                "proposal": record.proposal,
+                "page_count": record.page_count,
+                "chunk_count": record.chunk_count,
+            }
+            for record in records
+        ]
+
     def _find_by_document_id(self, document_id: int) -> JobRecord | None:
         return self._session.execute(
             select(JobRecord).where(JobRecord.document_id == document_id)
@@ -206,3 +229,6 @@ class JobRepository:
         if record is not None:
             self._session.delete(record)
             self._session.commit()
+
+    def close(self) -> None:
+        self._session.close()
