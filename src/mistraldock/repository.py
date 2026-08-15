@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from mistraldock.models import JobRecord, JobState, RemoteFileRecord, RunRecord, TriggerKind
+
+if TYPE_CHECKING:
+    from mistraldock.services.remote_cleanup import PendingRemoteFile
 
 _ACTIVE_STATES = {JobState.QUEUED, JobState.PROCESSING, JobState.RETRY_WAIT}
 
@@ -228,6 +232,29 @@ class JobRepository:
         ).scalar_one_or_none()
         if record is not None:
             self._session.delete(record)
+            self._session.commit()
+
+    def pending_remote_files(self, *, now: datetime) -> list[PendingRemoteFile]:
+        from mistraldock.services.remote_cleanup import PendingRemoteFile
+
+        records = self._session.execute(
+            select(RemoteFileRecord)
+            .where(RemoteFileRecord.next_attempt_at <= now)
+            .order_by(RemoteFileRecord.next_attempt_at)
+        ).scalars()
+        return [
+            PendingRemoteFile(record.id, record.provider_file_id, record.delete_attempts) for record in records
+        ]
+
+    def reschedule_remote_file(
+        self, *, provider_file_id: str, now: datetime, next_attempt_at: datetime
+    ) -> None:
+        record = self._session.execute(
+            select(RemoteFileRecord).where(RemoteFileRecord.provider_file_id == provider_file_id)
+        ).scalar_one_or_none()
+        if record is not None:
+            record.delete_attempts += 1
+            record.next_attempt_at = next_attempt_at
             self._session.commit()
 
     def close(self) -> None:

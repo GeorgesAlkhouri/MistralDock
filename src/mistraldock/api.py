@@ -21,6 +21,7 @@ from mistraldock.config import Settings
 from mistraldock.db import Database
 from mistraldock.repository import JobRepository
 from mistraldock.services.processor import DocumentProcessor, ProcessorDependencies
+from mistraldock.services.remote_cleanup import cleanup_remote_files
 from mistraldock.services.worker import Worker
 
 
@@ -164,6 +165,8 @@ async def _worker_loop(
     while not stop.is_set():
         repository = JobRepository(database.session_factory())
         try:
+            now = datetime.now(UTC)
+            await cleanup_remote_files(repository, mistral, now)
             processor = DocumentProcessor(
                 ProcessorDependencies(
                     settings=settings,
@@ -181,7 +184,7 @@ async def _worker_loop(
                 retry_base_seconds=settings.retry_base_seconds,
                 retry_max_seconds=settings.retry_max_seconds,
             )
-            worked = await worker.run_once(datetime.now(UTC))
+            worked = await worker.run_once(now)
         finally:
             repository.close()
         try:

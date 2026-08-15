@@ -5,6 +5,7 @@ description = "External Mistral OCR sidecar for Paperless-ngx"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+  "alembic>=1.14,<2",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
   "mistralai>=1.5,<2",
@@ -31,7 +32,6 @@ dev = [
   "pytest-asyncio>=0.25,<1",
   "respx>=0.22,<1",
   "ruff>=0.9,<1",
-  "alembic>=1.14,<2",
   "pyyaml>=6.0,<7",
 ]
 

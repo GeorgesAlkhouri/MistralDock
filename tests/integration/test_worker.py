@@ -17,6 +17,7 @@ class FakeRepository:
         self.claimed = ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 2)
         self.retries: list[tuple[datetime, str]] = []
         self.finished: list[tuple[JobState, bool | None]] = []
+        self.proposals: list[dict[str, object] | None] = []
 
     def claim_due_job(self, *, now: datetime, lease_seconds: int) -> ClaimedJob | None:
         assert now is NOW
@@ -30,6 +31,7 @@ class FakeRepository:
 
     def finish_run(self, **kwargs: object) -> None:
         self.finished.append((kwargs["state"], kwargs["applied"]))
+        self.proposals.append(kwargs["proposal"])
 
 
 class RetryProcessor:
@@ -45,6 +47,15 @@ class SuccessProcessor:
 class CrashProcessor:
     async def process(self, _: ClaimedJob) -> ProcessResult:
         raise RuntimeError("provider connection reset")
+
+
+class FullPayloadProcessor:
+    async def process(self, _: ClaimedJob) -> ProcessResult:
+        return ProcessResult(
+            JobState.SUCCEEDED,
+            applied=False,
+            payload={"content": "sensitive OCR text", "title": "Vorschlag", "tags": [4]},
+        )
 
 
 @pytest.mark.asyncio
@@ -96,3 +107,20 @@ async def test_worker_retries_unclassified_provider_failure() -> None:
 
     assert await worker.run_once(NOW) is True
     assert repository.retries == [(NOW + timedelta(seconds=60), "unexpected_error")]
+
+
+@pytest.mark.asyncio
+async def test_worker_never_persists_ocr_content_in_run_proposal() -> None:
+    repository = FakeRepository()
+    worker = Worker(
+        repository=repository,
+        processor=FullPayloadProcessor(),
+        max_attempts=5,
+        retry_base_seconds=30,
+        retry_max_seconds=3600,
+        lease_seconds=300,
+        jitter=lambda _: 0,
+    )
+
+    assert await worker.run_once(NOW) is True
+    assert repository.proposals == [{"title": "Vorschlag", "tags": [4]}]

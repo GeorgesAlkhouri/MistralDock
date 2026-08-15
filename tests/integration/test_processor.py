@@ -4,7 +4,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pytest
+from mistralai import MistralError
 from pypdf import PdfWriter
 
 from mistraldock.clients.mistral import OCRChunkResult, UploadedChunk
@@ -12,7 +14,12 @@ from mistraldock.clients.paperless import PaperlessDocument
 from mistraldock.config import WriteMode
 from mistraldock.models import JobState, TriggerKind
 from mistraldock.repository import ClaimedJob
-from mistraldock.services.processor import DocumentProcessor, ProcessorDependencies
+from mistraldock.services.processor import (
+    DocumentProcessor,
+    PermanentProcessingError,
+    ProcessorDependencies,
+    RetryableProcessingError,
+)
 from mistraldock.services.validation import DocumentMetadata
 
 NOW = datetime(2026, 8, 15, 12, 0, tzinfo=UTC)
@@ -22,6 +29,16 @@ def _pdf_bytes(tmp_path: Path) -> bytes:
     source = tmp_path / "fixture.pdf"
     writer = PdfWriter()
     writer.add_blank_page(width=200, height=200)
+    with source.open("wb") as handle:
+        writer.write(handle)
+    return source.read_bytes()
+
+
+def _multi_page_pdf_bytes(tmp_path: Path, page_count: int) -> bytes:
+    source = tmp_path / "multi-page-fixture.pdf"
+    writer = PdfWriter()
+    for _ in range(page_count):
+        writer.add_blank_page(width=200, height=200)
     with source.open("wb") as handle:
         writer.write(handle)
     return source.read_bytes()
@@ -84,8 +101,65 @@ class FakeRemoteFiles:
         self.removed.append(provider_file_id)
 
 
+class GenericTitleMistral(FakeMistral):
+    async def ocr_uploaded(self, _: UploadedChunk, __: list[str]) -> OCRChunkResult:
+        return OCRChunkResult(
+            markdown="Kabelrechnung für Juli 2026",
+            metadata=DocumentMetadata(title="Rechnung", created=None, tags=[]),
+            page_count=1,
+        )
+
+
+class ForbiddenPaperless(FakePaperless):
+    async def get_document(self, _: int) -> PaperlessDocument:
+        request = httpx.Request("GET", "https://paperless.example/api/documents/42/")
+        response = httpx.Response(403, request=request)
+        raise httpx.HTTPStatusError("forbidden", request=request, response=response)
+
+
+class UnauthorizedMistral(FakeMistral):
+    async def ocr_uploaded(self, _: UploadedChunk, __: list[str]) -> OCRChunkResult:
+        request = httpx.Request("POST", "https://api.mistral.ai/v1/ocr")
+        response = httpx.Response(401, request=request)
+        raise MistralError("unauthorized", response)
+
+
+class UnavailableMistral(FakeMistral):
+    async def ocr_uploaded(self, _: UploadedChunk, __: list[str]) -> OCRChunkResult:
+        request = httpx.Request("POST", "https://api.mistral.ai/v1/ocr")
+        response = httpx.Response(503, request=request)
+        raise MistralError("unavailable", response)
+
+
+class MultiChunkMistral(FakeMistral):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ocr_calls = 0
+        self.consolidated = False
+
+    async def ocr_uploaded(self, _: UploadedChunk, __: list[str]) -> OCRChunkResult:
+        self.ocr_calls += 1
+        return OCRChunkResult(
+            markdown=f"OCR Seite {self.ocr_calls}",
+            metadata=DocumentMetadata(title=f"Teil {self.ocr_calls}", created=None, tags=[]),
+            page_count=1,
+        )
+
+    async def consolidate_metadata(self, _: list[dict[str, object]], __: list[str]) -> DocumentMetadata:
+        self.consolidated = True
+        return DocumentMetadata(
+            title="Vodafone – Kabelrechnung Juli 2026",
+            created="2026-07-01",
+            tags=["Telekommunikation"],
+        )
+
+
 def _document(modified: str = "2026-08-15T12:00:00Z") -> PaperlessDocument:
     return PaperlessDocument(42, frozenset({4}), modified, "scan.pdf", 7)
+
+
+def _settings(write_mode: WriteMode, *, ocr_chunk_pages: int = 8) -> SimpleNamespace:
+    return SimpleNamespace(write_mode=write_mode, ocr_chunk_pages=ocr_chunk_pages)
 
 
 @pytest.mark.asyncio
@@ -94,7 +168,7 @@ async def test_processor_applies_one_versioned_patch_in_live_mode(tmp_path: Path
     mistral = FakeMistral()
     remote_files = FakeRemoteFiles()
     dependencies = ProcessorDependencies(
-        settings=SimpleNamespace(write_mode=WriteMode.LIVE),
+        settings=_settings(WriteMode.LIVE),
         paperless=paperless,
         mistral=mistral,
         remote_files=remote_files,
@@ -124,7 +198,7 @@ async def test_processor_applies_one_versioned_patch_in_live_mode(tmp_path: Path
 async def test_processor_returns_conflict_without_patch_when_document_changed(tmp_path: Path) -> None:
     paperless = FakePaperless([_document(), _document("2026-08-15T12:05:00Z")], _pdf_bytes(tmp_path))
     dependencies = ProcessorDependencies(
-        settings=SimpleNamespace(write_mode=WriteMode.LIVE),
+        settings=_settings(WriteMode.LIVE),
         paperless=paperless,
         mistral=FakeMistral(),
         remote_files=FakeRemoteFiles(),
@@ -139,3 +213,96 @@ async def test_processor_returns_conflict_without_patch_when_document_changed(tm
     assert result.state is JobState.CONFLICT
     assert result.applied is False
     assert paperless.patch_payloads == []
+
+
+@pytest.mark.asyncio
+async def test_processor_marks_invalid_metadata_as_permanent_failure(tmp_path: Path) -> None:
+    paperless = FakePaperless([_document(), _document()], _pdf_bytes(tmp_path))
+    dependencies = ProcessorDependencies(
+        settings=_settings(WriteMode.DRY_RUN),
+        paperless=paperless,
+        mistral=GenericTitleMistral(),
+        remote_files=FakeRemoteFiles(),
+        workspace_root=tmp_path,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(PermanentProcessingError, match="title"):
+        await DocumentProcessor(dependencies).process(
+            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
+        )
+
+
+@pytest.mark.asyncio
+async def test_processor_marks_paperless_forbidden_as_permanent_failure(tmp_path: Path) -> None:
+    dependencies = ProcessorDependencies(
+        settings=_settings(WriteMode.DRY_RUN),
+        paperless=ForbiddenPaperless([], b""),
+        mistral=FakeMistral(),
+        remote_files=FakeRemoteFiles(),
+        workspace_root=tmp_path,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(PermanentProcessingError, match="paperless_http_403"):
+        await DocumentProcessor(dependencies).process(
+            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
+        )
+
+
+@pytest.mark.asyncio
+async def test_processor_marks_mistral_unauthorized_as_permanent_failure(tmp_path: Path) -> None:
+    paperless = FakePaperless([_document()], _pdf_bytes(tmp_path))
+    dependencies = ProcessorDependencies(
+        settings=_settings(WriteMode.DRY_RUN),
+        paperless=paperless,
+        mistral=UnauthorizedMistral(),
+        remote_files=FakeRemoteFiles(),
+        workspace_root=tmp_path,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(PermanentProcessingError, match="mistral_http_401"):
+        await DocumentProcessor(dependencies).process(
+            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
+        )
+
+
+@pytest.mark.asyncio
+async def test_processor_retries_mistral_server_errors(tmp_path: Path) -> None:
+    paperless = FakePaperless([_document()], _pdf_bytes(tmp_path))
+    dependencies = ProcessorDependencies(
+        settings=_settings(WriteMode.DRY_RUN),
+        paperless=paperless,
+        mistral=UnavailableMistral(),
+        remote_files=FakeRemoteFiles(),
+        workspace_root=tmp_path,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(RetryableProcessingError, match="mistral_http_503"):
+        await DocumentProcessor(dependencies).process(
+            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
+        )
+
+
+@pytest.mark.asyncio
+async def test_processor_uses_configured_chunk_page_count(tmp_path: Path) -> None:
+    paperless = FakePaperless([_document(), _document()], _multi_page_pdf_bytes(tmp_path, page_count=2))
+    mistral = MultiChunkMistral()
+    dependencies = ProcessorDependencies(
+        settings=_settings(WriteMode.DRY_RUN, ocr_chunk_pages=1),
+        paperless=paperless,
+        mistral=mistral,
+        remote_files=FakeRemoteFiles(),
+        workspace_root=tmp_path,
+        now=lambda: NOW,
+    )
+
+    result = await DocumentProcessor(dependencies).process(
+        ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
+    )
+
+    assert result.state is JobState.SUCCEEDED
+    assert mistral.ocr_calls == 2
+    assert mistral.consolidated is True

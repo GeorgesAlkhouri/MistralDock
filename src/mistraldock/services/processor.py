@@ -10,13 +10,20 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Protocol
 
-from mistraldock.clients.mistral import OCRChunkResult, UploadedChunk
-from mistraldock.clients.paperless import PaperlessDocument
+import httpx
+from mistralai import MistralError, NoResponseError
+
+from mistraldock.clients.mistral import MistralProtocolError, OCRChunkResult, UploadedChunk
+from mistraldock.clients.paperless import PaperlessDocument, PaperlessProtocolError
 from mistraldock.config import Settings, WriteMode
 from mistraldock.models import JobState
 from mistraldock.repository import ClaimedJob
-from mistraldock.services.chunking import DocumentChunk, chunk_document
-from mistraldock.services.validation import DocumentMetadata, build_validated_update
+from mistraldock.services.chunking import DocumentChunk, UnsupportedDocumentError, chunk_document
+from mistraldock.services.validation import (
+    DocumentMetadata,
+    MetadataValidationError,
+    build_validated_update,
+)
 
 _MISTRAL_MAX_FILE_BYTES = 512 * 1024 * 1024
 logger = logging.getLogger(__name__)
@@ -88,6 +95,27 @@ class DocumentProcessor:
         self._dependencies = dependencies
 
     async def process(self, job: ClaimedJob) -> ProcessResult:
+        try:
+            return await self._process(job)
+        except (MistralProtocolError, PaperlessProtocolError, UnsupportedDocumentError) as exc:
+            raise PermanentProcessingError(str(exc)) from exc
+        except MistralError as exc:
+            error_code = f"mistral_http_{exc.status_code}"
+            if exc.status_code == 429 or exc.status_code >= 500:
+                raise RetryableProcessingError(error_code) from exc
+            raise PermanentProcessingError(error_code) from exc
+        except NoResponseError as exc:
+            raise RetryableProcessingError("mistral_no_response") from exc
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            error_code = f"paperless_http_{status_code}"
+            if status_code == 429 or status_code >= 500:
+                raise RetryableProcessingError(error_code) from exc
+            raise PermanentProcessingError(error_code) from exc
+        except httpx.TransportError as exc:
+            raise RetryableProcessingError("paperless_transport_error") from exc
+
+    async def _process(self, job: ClaimedJob) -> ProcessResult:
         original = await self._dependencies.paperless.get_document(job.document_id)
         initial_tags = await self._dependencies.paperless.list_tags()
         self._dependencies.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -95,7 +123,9 @@ class DocumentProcessor:
             workspace = Path(temporary_directory)
             source = workspace / Path(original.original_filename).name
             await self._dependencies.paperless.download_original(original, source)
-            chunks = chunk_document(source, workspace / "chunks")
+            chunks = chunk_document(
+                source, workspace / "chunks", max_pages=self._dependencies.settings.ocr_chunk_pages
+            )
             results = [await self._ocr_chunk(job, chunk, sorted(initial_tags)) for chunk in chunks]
 
         content = "\n\n".join(result.markdown for result in results)
@@ -104,14 +134,17 @@ class DocumentProcessor:
         if fresh.version_id != original.version_id or fresh.modified != original.modified:
             return ProcessResult(JobState.CONFLICT, applied=False, error_code="document_changed")
         current_tags = await self._dependencies.paperless.list_tags()
-        update = build_validated_update(
-            metadata=metadata,
-            content=content,
-            current_tag_ids=set(fresh.tags),
-            tags_by_name=current_tags,
-            original_filename=fresh.original_filename,
-            today=self._dependencies.now().date(),
-        )
+        try:
+            update = build_validated_update(
+                metadata=metadata,
+                content=content,
+                current_tag_ids=set(fresh.tags),
+                tags_by_name=current_tags,
+                original_filename=fresh.original_filename,
+                today=self._dependencies.now().date(),
+            )
+        except MetadataValidationError as exc:
+            raise PermanentProcessingError(str(exc)) from exc
         if self._dependencies.settings.write_mode is WriteMode.DRY_RUN:
             return ProcessResult(
                 JobState.SUCCEEDED,

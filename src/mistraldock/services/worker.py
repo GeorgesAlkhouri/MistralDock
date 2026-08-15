@@ -109,5 +109,11 @@ class Worker:
             now=now,
             applied=result.applied,
             error_code=result.error_code,
-            proposal=result.payload,
+            proposal=_safe_proposal(result.payload),
         )
+
+
+def _safe_proposal(payload: dict[str, object] | None) -> dict[str, object] | None:
+    if payload is None:
+        return None
+    return {key: value for key, value in payload.items() if key != "content"}
