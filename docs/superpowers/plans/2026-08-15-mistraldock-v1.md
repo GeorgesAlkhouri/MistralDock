@@ -4,7 +4,7 @@
 
 **Goal:** Build a Python 3.13 container service that receives Paperless webhooks, performs Mistral OCR and metadata extraction, and safely updates the same Paperless document through its REST API.
 
-**Architecture:** FastAPI accepts authenticated requests and a single in-process worker consumes a durable SQLite queue. The processor talks only to Paperless API v10 and Mistral APIs, chunks PDFs into eight-page units, validates a three-field metadata schema, and either persists a dry-run proposal or applies one version-aware PATCH.
+**Architecture:** FastAPI accepts authenticated requests and a single in-process worker consumes a durable SQLite queue. The processor talks only to the target instance's confirmed Paperless API v9 and Mistral APIs, chunks PDFs into eight-page units, validates a three-field metadata schema, and either persists a dry-run proposal or applies one version-aware PATCH.
 
 **Tech Stack:** Python 3.13, FastAPI, Pydantic v2, SQLAlchemy 2/Alembic, httpx, mistralai, pypdf, pytest, respx, Docker.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Run on Python 3.13; pin a reproducible dependency lockfile.
-- Use only official Paperless REST API v10 and Mistral APIs; never mount or query Paperless storage/database.
+- Use only official Paperless REST API v9 and Mistral APIs; never mount or query Paperless storage/database.
 - Keep `PAPERLESS_TOKEN`, `MISTRAL_API_KEY`, and `MISTRALDOCK_API_TOKEN` out of Git, logs, responses, and metrics.
 - Support PDFs and PNG/JPG/JPEG/TIFF/BMP/GIF/WEBP; OCR each chunk at most once per processing attempt.
 - Split PDFs into at most eight-page chunks; for multi-chunk documents consolidate metadata with one structured Mistral chat completion.
@@ -32,7 +32,7 @@ src/mistraldock/
   db.py                  # SQLAlchemy engine/session and Alembic integration
   models.py              # database rows and API/domain value objects
   repository.py          # job/run/remote-file transactional persistence
-  clients/paperless.py   # API-v10 Paperless HTTP client
+  clients/paperless.py   # API-v9 Paperless HTTP client
   clients/mistral.py     # upload/OCR/annotation/chat/delete adapter
   services/chunking.py   # PDF/image detection, chunk generation and cleanup
   services/metadata.py   # annotation prompts and structured result parsing
@@ -263,7 +263,7 @@ async def ocr_chunk(self, chunk: DocumentChunk, vocabulary: list[str]) -> OCRChu
     """Upload, OCR with document annotation, and return Markdown + three-field metadata."""
 ```
 
-Use `original=true`, API-v10 Accept header, full pagination, an eight-page chunk maximum, Mistral upload/signed URL/OCR/delete in `finally`, annotation JSON schema, and a temperature-zero structured chat consolidation for multi-chunk documents.
+Use `original=true`, API-v9 Accept header, full pagination, an eight-page chunk maximum, Mistral upload/signed URL/OCR/delete in `finally`, annotation JSON schema, and a temperature-zero structured chat consolidation for multi-chunk documents.
 
 - [ ] **Step 4: Verify adapter/chunk tests pass**
 
@@ -441,7 +441,7 @@ Expected: all tests pass, zero ruff errors and a successful image build.
 
 - [ ] **Step 5: Run the user-authorized read-only Paperless smoke test**
 
-Run: `curl --fail-with-body --silent --show-error -H "Authorization: Token $PAPERLESS_TOKEN" -H "Accept: application/json; version=10" "$PAPERLESS_URL/api/tags/?page_size=1"`
+Run: `curl --fail-with-body --silent --show-error -H "Authorization: Token $PAPERLESS_TOKEN" -H "Accept: application/json; version=9" "$PAPERLESS_URL/api/tags/?page_size=1"`
 
 Expected: HTTP 200 and a paginated tag response; never print or persist the token.
 
@@ -457,6 +457,5 @@ git commit -m "docs: package and operate MistralDock"
 - [ ] Re-read the specification and map every v1 requirement to Tasks 1–7.
 - [ ] Run `uv run --python 3.13 pytest -q`, `uv run --python 3.13 ruff check .`, and `docker build -t mistraldock:local .` with fresh output.
 - [ ] Run `git diff main...HEAD --check` and inspect `git status --short` for an expected clean worktree.
-- [ ] Confirm the Paperless smoke test uses token auth/API v10 and performs no write operation.
+- [ ] Confirm the Paperless smoke test uses token auth/API v9 and performs no write operation.
 - [ ] Report the committed implementation, outstanding requirement for a Mistral API key, and exact deployment commands without exposing any secret.
-

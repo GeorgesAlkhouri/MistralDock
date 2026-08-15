@@ -51,9 +51,10 @@ class Metrics:
 
 
 def create_app(
-    settings: Settings, *, database: Database | None = None, start_worker: bool = True
+    settings: Settings | None = None, *, database: Database | None = None, start_worker: bool = True
 ) -> FastAPI:
     """Create a MistralDock API instance with one optional in-process worker."""
+    settings = settings or Settings()
     database = database or Database(settings.database_url)
     metrics = Metrics()
     paperless = PaperlessClient(

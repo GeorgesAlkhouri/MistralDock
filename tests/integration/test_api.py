@@ -29,6 +29,18 @@ def app(settings: Settings) -> object:
     return create_app(settings, database=database, start_worker=False)
 
 
+def test_factory_loads_settings_from_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PAPERLESS_URL", "https://paperless.example")
+    monkeypatch.setenv("PAPERLESS_TOKEN", "paperless-token")
+    monkeypatch.setenv("MISTRAL_API_KEY", "mistral-key")
+    monkeypatch.setenv("MISTRALDOCK_API_TOKEN", "service-token")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'factory.db'}")
+
+    app = create_app(start_worker=False)
+
+    assert app.title == "MistralDock"
+
+
 @pytest.mark.asyncio
 async def test_webhook_queues_document_and_returns_202(app: object) -> None:
     transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
