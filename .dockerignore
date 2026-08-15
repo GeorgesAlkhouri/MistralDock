@@ -11,5 +11,3 @@ __pycache__
 *.py[cod]
 docs
 tests
-CONTRIBUTING.md
-SECURITY.md

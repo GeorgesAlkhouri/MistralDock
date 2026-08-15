@@ -71,11 +71,9 @@ uv run ruff check .
 
 The test suite uses fake Paperless and Mistral providers; it does not require live credentials. Before enabling production writes, run the documented dry-run pilot against representative Paperless documents.
 
-## Security and contributing
+## Security
 
-- Please read [SECURITY.md](SECURITY.md) before reporting a vulnerability.
-- Contributions, local checks, and scope expectations are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
-- Never commit `.env` files, API keys, Paperless tokens, OCR text, or source documents.
+Never commit `.env` files, API keys, Paperless tokens, OCR text, or source documents.
 
 ## License
 
