@@ -349,7 +349,11 @@ git commit -m "feat: process queued Paperless documents safely"
 
 ```python
 async def test_webhook_queues_document_and_returns_202(client: AsyncClient) -> None:
-    response = await client.post("/v1/webhooks/paperless", headers=auth_header(), json={"document_id": 42})
+    response = await client.post(
+        "/v1/webhooks/paperless",
+        headers=auth_header(),
+        json={"document_url": "https://paperless.example/documents/42/"},
+    )
     assert response.status_code == 202
     assert response.json()["state"] == "queued"
 
@@ -431,7 +435,7 @@ services:
     tmpfs: [/tmp]
 ```
 
-Document: Paperless service-account permissions, exact Document Added webhook body/header, initial dry-run evaluation of 20–50 documents, reprocess API, promotion to live mode, and rollback.
+Document: Paperless service-account permissions, exact Document Added webhook body `{"document_url": "{{ doc_url }}"}` and header, initial dry-run evaluation of 20–50 documents, reprocess API, promotion to live mode, and rollback.
 
 - [ ] **Step 4: Verify all automated tests, lint and container build**
 
