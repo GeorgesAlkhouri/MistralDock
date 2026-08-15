@@ -31,7 +31,7 @@ Nicht Bestandteil von v1 sind neue Tags, Korrespondenten, Dokumenttypen, Custom 
 
 1. **HTTP API:** authentifiziert Webhooks und manuelle Aufträge, liefert Status sowie Health-Endpunkte und bestätigt angenommene Aufträge sofort mit HTTP 202.
 2. **Durable Queue:** dedupliziert automatische Aufträge pro Dokument, vergibt zeitlich begrenzte Worker-Leases und macht abgebrochene Arbeit nach einem Neustart wieder ausführbar.
-3. **Paperless Client:** spricht API-Version 10 mit `Accept: application/json; version=10`, verfolgt Pagination und verwendet `Authorization: Token …`.
+3. **Paperless Client:** spricht die auf der Zielinstanz bestätigte API-Version 9 mit `Accept: application/json; version=9`, verfolgt Pagination und verwendet `Authorization: Token …`.
 4. **Document Processor:** lädt die aktuelle Originaldatei, ermittelt Typ und Seitenzahl, erzeugt PDF-Chunks und setzt OCR-Seiten wieder geordnet zusammen.
 5. **Mistral Client:** lädt Dateien mit Zweck `ocr`, erzeugt signierte URLs, ruft OCR/Annotations auf und löscht Remote-Dateien anschließend.
 6. **Metadata Pipeline:** erzeugt und konsolidiert ausschließlich `title`, `created` und `tags`.
@@ -80,7 +80,7 @@ Pflichtwerte:
 
 Festgelegte Defaults:
 
-- `PAPERLESS_API_VERSION=10`
+- `PAPERLESS_API_VERSION=9`
 - `MISTRAL_OCR_MODEL=mistral-ocr-latest`
 - `MISTRAL_METADATA_MODEL=mistral-small-latest`
 - `DATABASE_URL=sqlite:////data/mistraldock.db`
@@ -170,7 +170,7 @@ Beim Start werden Datenbankmigrationen ausgeführt, abgelaufene Leases freigegeb
 ### Automatisierte Tests
 
 - Unit-Tests für Konfiguration, Authentifizierung, Pagination, Chunkgrenzen, Seitenreihenfolge, Schema-/Titel-/Datumsvalidierung, exaktes Tag-Mapping, Tag-Vereinigung, Backoff und Zustandsübergänge.
-- Contract-Tests gegen simulierte Paperless- und Mistral-HTTP-Antworten: API-v10-Header, Originaldownload, versionierter PATCH, Mistral Upload/Signed URL/OCR/Delete sowie Fehlerklassen.
+- Contract-Tests gegen simulierte Paperless- und Mistral-HTTP-Antworten: API-v9-Header, Originaldownload, versionierter PATCH, Mistral Upload/Signed URL/OCR/Delete sowie Fehlerklassen.
 - Integrations-Test mit temporärer SQLite-Datenbank und Fake-Providern für den vollständigen Pfad: Webhook → Queue → ein/mehrere Chunks → Konsolidierung → Dry-run beziehungsweise ein PATCH.
 - Recovery-Tests für Prozessabbruch, abgelaufenen Lease, doppelten Webhook, PATCH-Timeout mit erfolgreicher Verifikation, konkurrierende Dokumentänderung und fehlgeschlagene Mistral-Löschung.
 - Container-Smoke-Test für nicht-root-Ausführung, read-only Root-Filesystem, beschreibbares `/data` und `/tmp`, Health-Endpunkte und graceful shutdown.
