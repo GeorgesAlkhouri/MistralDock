@@ -24,7 +24,14 @@ class FakeFiles:
 
 
 class FakeOcr:
-    async def process_async(self, **_: object) -> SimpleNamespace:
+    def __init__(self) -> None:
+        self.received_annotation_format = False
+
+    async def process_async(self, **kwargs: object) -> SimpleNamespace:
+        response_format = kwargs.get("document_annotation_format")
+        if not hasattr(response_format, "json_schema"):
+            raise AssertionError("Mistral OCR calls require an SDK response format")
+        self.received_annotation_format = True
         return SimpleNamespace(
             pages=[SimpleNamespace(markdown="OCR page 1")],
             document_annotation='{"title":"Vodafone – Rechnung","created":"2026-07-01","tags":["Telekommunikation"]}',
@@ -48,7 +55,8 @@ class FakeChat:
 async def test_mistral_ocr_returns_markdown_metadata_and_deletes_uploaded_file(tmp_path: Path) -> None:
     source = tmp_path / "chunk.pdf"
     source.write_bytes(b"pdf")
-    fake = SimpleNamespace(files=FakeFiles(), ocr=FakeOcr(), chat=FakeChat())
+    fake_ocr = FakeOcr()
+    fake = SimpleNamespace(files=FakeFiles(), ocr=fake_ocr, chat=FakeChat())
     client = MistralClient("key", ocr_model="mistral-ocr-latest", metadata_model="mistral-small-latest", sdk=fake)
 
     uploaded = await client.upload_chunk(DocumentChunk(source, (0,), "application/pdf", is_temporary=False))
@@ -57,6 +65,7 @@ async def test_mistral_ocr_returns_markdown_metadata_and_deletes_uploaded_file(t
 
     assert result.markdown == "OCR page 1"
     assert result.metadata.title == "Vodafone – Rechnung"
+    assert fake_ocr.received_annotation_format is True
     assert fake.files.deleted == ["file-1"]
 
 
