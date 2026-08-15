@@ -42,6 +42,11 @@ class SuccessProcessor:
         return ProcessResult(JobState.SUCCEEDED, applied=False, payload={"title": "Vorschlag"})
 
 
+class CrashProcessor:
+    async def process(self, _: ClaimedJob) -> ProcessResult:
+        raise RuntimeError("provider connection reset")
+
+
 @pytest.mark.asyncio
 async def test_worker_schedules_exponential_retry_for_transient_error() -> None:
     repository = FakeRepository()
@@ -74,3 +79,20 @@ async def test_worker_finishes_successful_dry_run() -> None:
 
     assert await worker.run_once(NOW) is True
     assert repository.finished == [(JobState.SUCCEEDED, False)]
+
+
+@pytest.mark.asyncio
+async def test_worker_retries_unclassified_provider_failure() -> None:
+    repository = FakeRepository()
+    worker = Worker(
+        repository=repository,
+        processor=CrashProcessor(),
+        max_attempts=5,
+        retry_base_seconds=30,
+        retry_max_seconds=3600,
+        lease_seconds=300,
+        jitter=lambda _: 0,
+    )
+
+    assert await worker.run_once(NOW) is True
+    assert repository.retries == [(NOW + timedelta(seconds=60), "unexpected_error")]
