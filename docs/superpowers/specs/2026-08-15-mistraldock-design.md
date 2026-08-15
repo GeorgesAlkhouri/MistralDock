@@ -21,7 +21,7 @@ Nicht Bestandteil von v1 sind neue Tags, Korrespondenten, Dokumenttypen, Custom 
 
 ### Laufzeit und Deployment
 
-- Python 3.12, FastAPI, Pydantic v2, `httpx`, offizielles `mistralai`-SDK, SQLAlchemy 2, Alembic und `pypdf`.
+- Python 3.13, FastAPI, Pydantic v2, `httpx`, offizielles `mistralai`-SDK, SQLAlchemy 2, Alembic und `pypdf`.
 - Ein OCI-Container mit einem API-Prozess und einem internen, dauerhaften Worker; v1 unterstützt genau eine Containerinstanz.
 - SQLite im WAL-Modus auf einem persistenten Volume hält Queue-, Run- und Cleanup-Zustand. Es wird kein zusätzlicher Broker benötigt.
 - Der Container erhält keinen Mount auf Paperless-Medien oder die Paperless-Datenbank. Ein temporäres Verzeichnis im Container dient nur der laufenden Verarbeitung.
