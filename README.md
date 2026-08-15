@@ -29,6 +29,16 @@ The container is non-root, uses a persistent volume only for its own SQLite stat
 
 Required environment values are `PAPERLESS_URL`, `PAPERLESS_TOKEN`, `MISTRAL_API_KEY`, and `MISTRALDOCK_API_TOKEN`. Use a new, random `MISTRALDOCK_API_TOKEN`; do not reuse either provider credential for webhook authentication.
 
+## Container image
+
+Every successful push to `main` builds and publishes `ghcr.io/georgesalkhouri/mistraldock` with the `latest` tag and an immutable `sha-<commit>` tag. Pull a released image with:
+
+```sh
+docker pull ghcr.io/georgesalkhouri/mistraldock:latest
+```
+
+The first published package may need to be made public from the repository's GitHub Packages settings before anonymous pulls are available.
+
 ## Paperless configuration
 
 Create a dedicated Paperless user/token with these minimum global permissions and object access:

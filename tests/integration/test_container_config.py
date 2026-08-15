@@ -18,3 +18,25 @@ def test_env_example_defaults_to_dry_run() -> None:
     assert "WRITE_MODE=dry-run" in environment
     assert "PAPERLESS_TOKEN=" in environment
     assert "MISTRAL_API_KEY=" in environment
+
+
+def test_ghcr_workflow_builds_prs_and_publishes_main() -> None:
+    workflow = yaml.load(
+        Path(".github/workflows/container-image.yml").read_text(), Loader=yaml.BaseLoader
+    )
+
+    assert workflow["on"]["push"]["branches"] == ["main"]
+    assert workflow["on"]["pull_request"]["branches"] == ["main"]
+    assert workflow["permissions"] == {"contents": "read", "packages": "write"}
+
+    steps = workflow["jobs"]["container"]["steps"]
+    login = next(step for step in steps if step.get("uses") == "docker/login-action@v3")
+    metadata = next(step for step in steps if step.get("id") == "meta")
+    build = next(step for step in steps if step.get("uses") == "docker/build-push-action@v6")
+
+    assert login["if"] == "github.event_name == 'push'"
+    assert login["with"]["registry"] == "ghcr.io"
+    assert metadata["with"]["images"] == "ghcr.io/${{ github.repository_owner }}/mistraldock"
+    assert "type=raw,value=latest" in metadata["with"]["tags"]
+    assert "type=sha,prefix=sha-" in metadata["with"]["tags"]
+    assert build["with"]["push"] == "${{ github.event_name == 'push' }}"
