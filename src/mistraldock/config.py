@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     paperless_token: SecretStr = Field(validation_alias="PAPERLESS_TOKEN")
     mistral_api_key: SecretStr = Field(validation_alias="MISTRAL_API_KEY")
     mistraldock_api_token: SecretStr = Field(validation_alias="MISTRALDOCK_API_TOKEN")
-    paperless_api_version: int = Field(default=10, validation_alias="PAPERLESS_API_VERSION", ge=1)
+    paperless_api_version: int = Field(default=9, validation_alias="PAPERLESS_API_VERSION", ge=1)
     mistral_ocr_model: str = Field(
         default="mistral-ocr-latest", validation_alias="MISTRAL_OCR_MODEL", min_length=1
     )
