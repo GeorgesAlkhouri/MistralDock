@@ -46,12 +46,12 @@ Alle `/v1`-Endpunkte verlangen `Authorization: Bearer <MISTRALDOCK_API_TOKEN>`. 
 Payload:
 
 ```json
-{"document_id": 123}
+{"document_url": "https://paperless.example/documents/123/"}
 ```
 
-Ein gültiger neuer Auftrag liefert `202 Accepted` mit `document_id`, `job_id` und Zustand `queued`. Ein Duplikat eines bereits laufenden oder erfolgreichen automatischen Auftrags liefert ebenfalls 202 und den vorhandenen Zustand, erzeugt aber keinen weiteren Run. Ungültige Authentifizierung liefert 401, ungültiges JSON oder eine nichtpositive ID liefert 422.
+Ein gültiger neuer Auftrag liefert `202 Accepted` mit `document_id`, `job_id` und Zustand `queued`. Ein Duplikat eines bereits laufenden oder erfolgreichen automatischen Auftrags liefert ebenfalls 202 und den vorhandenen Zustand, erzeugt aber keinen weiteren Run. Ungültige Authentifizierung liefert 401, ungültiges JSON oder eine ungültige Dokument-URL liefert 422. Die URL wird ausschließlich zur Extraktion der positiven Dokument-ID aus einem Pfad wie `/documents/123/` verwendet.
 
-Paperless wird mit einem „Document Added“-Workflow konfiguriert. Die Webhook-Aktion sendet JSON `{"document_id": {{doc_id}}}` sowie den Bearer-Header an MistralDock.
+Paperless wird mit einem „Document Added“-Workflow konfiguriert. Die Webhook-Aktion sendet JSON `{"document_url": "{{ doc_url }}"}` sowie den Bearer-Header an MistralDock.
 
 ### `POST /v1/documents/{document_id}/reprocess`
 
@@ -186,7 +186,7 @@ Beim Start werden Datenbankmigrationen ausgeführt, abgelaufene Leases freigegeb
 ## 12. Verbindliche Quellen
 
 - [Paperless-ngx REST API, Authentifizierung, Dokumentversionen und API-Versionierung](https://docs.paperless-ngx.com/api/)
-- [Paperless-ngx Workflows, Webhooks und `doc_id`](https://docs.paperless-ngx.com/usage/#workflows)
+- [Paperless-ngx Workflows und Webhooks](https://docs.paperless-ngx.com/usage/#workflows)
 - [Mistral OCR API](https://docs.mistral.ai/api/endpoint/ocr)
 - [Mistral Document Annotations](https://docs.mistral.ai/studio/document-processing/annotations)
 - [Mistral Document Chunking](https://docs.mistral.ai/resources/cookbooks/mistral-ocr-documentchunking-readme)
