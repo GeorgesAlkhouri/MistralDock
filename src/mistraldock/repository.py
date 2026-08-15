@@ -198,3 +198,11 @@ class JobRepository:
         self._session.add(record)
         self._session.commit()
         return record.id
+
+    def remove_remote_file(self, *, provider_file_id: str) -> None:
+        record = self._session.execute(
+            select(RemoteFileRecord).where(RemoteFileRecord.provider_file_id == provider_file_id)
+        ).scalar_one_or_none()
+        if record is not None:
+            self._session.delete(record)
+            self._session.commit()
