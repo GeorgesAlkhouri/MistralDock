@@ -42,18 +42,38 @@ def test_factory_loads_settings_from_environment(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_webhook_queues_document_and_returns_202(app: object) -> None:
+async def test_webhook_queues_document_url_and_returns_202(app: object) -> None:
     transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/v1/webhooks/paperless",
             headers={"Authorization": "Bearer service-token"},
-            json={"document_id": 42},
+            json={"document_url": "https://paperless.example/documents/42/"},
         )
 
     assert response.status_code == 202
     assert response.json()["document_id"] == 42
     assert response.json()["state"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_non_document_urls_and_document_id_payloads(app: object) -> None:
+    transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
+    headers = {"Authorization": "Bearer service-token"}
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        non_document_url = await client.post(
+            "/v1/webhooks/paperless",
+            headers=headers,
+            json={"document_url": "https://paperless.example/search/?query=invoice"},
+        )
+        numeric_id = await client.post(
+            "/v1/webhooks/paperless",
+            headers=headers,
+            json={"document_id": 42},
+        )
+
+    assert non_document_url.status_code == 422
+    assert numeric_id.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -70,7 +90,11 @@ async def test_runs_endpoint_returns_queued_job_without_document_content(app: ob
     transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
     headers = {"Authorization": "Bearer service-token"}
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        await client.post("/v1/webhooks/paperless", headers=headers, json={"document_id": 42})
+        await client.post(
+            "/v1/webhooks/paperless",
+            headers=headers,
+            json={"document_url": "/documents/42/"},
+        )
         response = await client.get("/v1/documents/42/runs", headers=headers)
 
     assert response.status_code == 200
