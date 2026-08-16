@@ -28,7 +28,7 @@ where = ["src"]
 
 [dependency-groups]
 dev = [
-  "pytest>=8.3,<9",
+  "pytest>=9.1,<10",
   "pytest-asyncio>=0.25,<1",
   "respx>=0.22,<1",
   "ruff>=0.9,<1",
