@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,8 @@ from mistraldock.services.metadata import (
     metadata_response_format,
 )
 from mistraldock.services.validation import DocumentMetadata
+
+logger = logging.getLogger(__name__)
 
 
 class MistralProtocolError(ValueError):
@@ -66,12 +69,17 @@ class MistralClient:
             table_format="markdown",
         )
         pages = getattr(response, "pages", None)
+        annotation = getattr(response, "document_annotation", None)
+        logger.info(
+            "mistral_ocr_response_received page_count=%d has_annotation=%s",
+            len(pages) if isinstance(pages, list) else 0,
+            str(isinstance(annotation, str)).lower(),
+        )
         if not isinstance(pages, list) or not pages:
             raise MistralProtocolError("missing_ocr_pages")
         markdown_pages = [getattr(page, "markdown", None) for page in pages]
         if not all(isinstance(markdown, str) for markdown in markdown_pages):
             raise MistralProtocolError("invalid_ocr_markdown")
-        annotation = getattr(response, "document_annotation", None)
         if not isinstance(annotation, str):
             raise MistralProtocolError("missing_document_annotation")
         try:

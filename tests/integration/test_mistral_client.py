@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -67,6 +68,22 @@ async def test_mistral_ocr_returns_markdown_metadata_and_deletes_uploaded_file(t
     assert result.metadata.title == "Vodafone – Rechnung"
     assert fake_ocr.received_annotation_format is True
     assert fake.files.deleted == ["file-1"]
+
+
+@pytest.mark.asyncio
+async def test_mistral_ocr_logs_when_provider_returns_response(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    source = tmp_path / "chunk.pdf"
+    source.write_bytes(b"pdf")
+    fake = SimpleNamespace(files=FakeFiles(), ocr=FakeOcr(), chat=FakeChat())
+    client = MistralClient("key", ocr_model="mistral-ocr-latest", metadata_model="mistral-small-latest", sdk=fake)
+
+    with caplog.at_level(logging.INFO, logger="mistraldock.clients.mistral"):
+        uploaded = await client.upload_chunk(DocumentChunk(source, (0,), "application/pdf", is_temporary=False))
+        await client.ocr_uploaded(uploaded, ["Telekommunikation"])
+
+    assert "mistral_ocr_response_received page_count=1 has_annotation=true" in caplog.messages
 
 
 @pytest.mark.asyncio
