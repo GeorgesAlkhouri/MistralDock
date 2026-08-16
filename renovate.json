@@ -16,6 +16,12 @@
       "minimumReleaseAge": "7 days"
     },
     {
+      "description": "Restrict Python updates to the 3.13 release line",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["python"],
+      "allowedVersions": ">=3.13,<3.14"
+    },
+    {
       "description": "Automerge verified minor, patch, and digest updates",
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true,
