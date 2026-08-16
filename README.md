@@ -6,7 +6,7 @@ It never reads the Paperless database or filesystem, creates no Paperless tags, 
 
 ## What it does
 
-1. Paperless emits a **Document Added** webhook with the document URL.
+1. Paperless emits a **Document Added** webhook with the document ID.
 2. MistralDock downloads the original and the currently visible Paperless tags through official APIs.
 3. PDFs are split into bounded page chunks; each is OCRed with Mistral and its structured document annotations.
 4. MistralDock validates OCR and metadata, preserves existing tags, and performs one version-aware Paperless update only in `WRITE_MODE=live`.
@@ -52,7 +52,7 @@ Create a Paperless **Document Added** workflow action:
 
 - URL: `http://mistraldock:8080/v1/webhooks/paperless`
 - Encoding: JSON
-- Body: `{"document_url": "{{ doc_url }}"}`
+- Body: `{"document_id": {{ doc_id }}}`
 - Header: `Authorization: Bearer <MISTRALDOCK_API_TOKEN>`
 
 Ensure Paperless permits internal webhook requests when its Docker network is used. The Paperless service must share the `paperless` network with MistralDock.
@@ -61,7 +61,7 @@ Ensure Paperless permits internal webhook requests when its Docker network is us
 
 The following endpoints use `Authorization: Bearer <MISTRALDOCK_API_TOKEN>`:
 
-- `POST /v1/webhooks/paperless` accepts a Document Added webhook with a Paperless document URL.
+- `POST /v1/webhooks/paperless` accepts a Document Added webhook with a Paperless document ID.
 - `POST /v1/documents/{id}/reprocess` forces a new run for the latest document version.
 - `GET /v1/documents/{id}/runs` returns safe run metadata without document bytes or OCR text.
 

@@ -46,12 +46,12 @@ Alle `/v1`-Endpunkte verlangen `Authorization: Bearer <MISTRALDOCK_API_TOKEN>`. 
 Payload:
 
 ```json
-{"document_url": "https://paperless.example/documents/123/"}
+{"document_id": 123}
 ```
 
-Ein gültiger neuer Auftrag liefert `202 Accepted` mit `document_id`, `job_id` und Zustand `queued`. Ein Duplikat eines bereits laufenden oder erfolgreichen automatischen Auftrags liefert ebenfalls 202 und den vorhandenen Zustand, erzeugt aber keinen weiteren Run. Ungültige Authentifizierung liefert 401, ungültiges JSON oder eine ungültige Dokument-URL liefert 422. Die URL wird ausschließlich zur Extraktion der positiven Dokument-ID aus einem Pfad wie `/documents/123/` verwendet.
+Ein gültiger neuer Auftrag liefert `202 Accepted` mit `document_id`, `job_id` und Zustand `queued`. Ein Duplikat eines bereits laufenden oder erfolgreichen automatischen Auftrags liefert ebenfalls 202 und den vorhandenen Zustand, erzeugt aber keinen weiteren Run. Ungültige Authentifizierung liefert 401, ungültiges JSON oder eine nichtpositive Dokument-ID liefert 422.
 
-Paperless wird mit einem „Document Added“-Workflow konfiguriert. Die Webhook-Aktion sendet JSON `{"document_url": "{{ doc_url }}"}` sowie den Bearer-Header an MistralDock.
+Paperless wird mit einem „Document Added“-Workflow konfiguriert. Die Webhook-Aktion sendet JSON `{"document_id": {{ doc_id }}}` sowie den Bearer-Header an MistralDock.
 
 ### `POST /v1/documents/{document_id}/reprocess`
 

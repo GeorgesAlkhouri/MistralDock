@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, generate_latest
-from pydantic import BaseModel, ConfigDict, PositiveInt, model_validator
+from pydantic import BaseModel, PositiveInt
 
 from mistraldock import __version__
 from mistraldock.clients.mistral import MistralClient
@@ -27,36 +25,9 @@ from mistraldock.services.processor import DocumentProcessor, ProcessorDependenc
 from mistraldock.services.remote_cleanup import cleanup_remote_files
 from mistraldock.services.worker import Worker
 
-_PAPERLESS_DOCUMENT_PATH = re.compile(r"(?:^|/)documents/([1-9][0-9]*)/?$")
-
-
-def _document_id_from_url(document_url: str) -> int:
-    parsed = urlparse(document_url)
-    if parsed.scheme:
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("document_url must be an HTTP(S) URL or an absolute path")
-    elif parsed.netloc or not parsed.path.startswith("/"):
-        raise ValueError("document_url must be an HTTP(S) URL or an absolute path")
-
-    match = _PAPERLESS_DOCUMENT_PATH.search(parsed.path)
-    if match is None:
-        raise ValueError("document_url must point to a Paperless document")
-    return int(match.group(1))
-
 
 class DocumentRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    document_url: str
-
-    @model_validator(mode="after")
-    def validates_document_url(self) -> DocumentRequest:
-        _document_id_from_url(self.document_url)
-        return self
-
-    @property
-    def resolved_document_id(self) -> int:
-        return _document_id_from_url(self.document_url)
+    document_id: PositiveInt
 
 
 class QueueResponse(BaseModel):
@@ -140,7 +111,7 @@ def create_app(
     async def paperless_webhook(payload: DocumentRequest) -> QueueResponse:
         repository = JobRepository(database.session_factory())
         try:
-            job = repository.enqueue_automatic(document_id=payload.resolved_document_id, now=datetime.now(UTC))
+            job = repository.enqueue_automatic(document_id=payload.document_id, now=datetime.now(UTC))
         finally:
             repository.close()
         metrics.jobs_accepted.labels(trigger="automatic").inc()
