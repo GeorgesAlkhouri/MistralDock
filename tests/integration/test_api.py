@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
+import logging.config
 from pathlib import Path
 
 import httpx
 import pytest
+import uvicorn.config
 
 from mistraldock.api import create_app
 from mistraldock.config import Settings
@@ -39,6 +42,23 @@ def test_factory_loads_settings_from_environment(monkeypatch: pytest.MonkeyPatch
     app = create_app(start_worker=False)
 
     assert app.title == "MistralDock"
+
+
+def test_factory_enables_mistraldock_info_logs_under_uvicorn_defaults(settings: Settings) -> None:
+    root = logging.getLogger()
+    original_handlers = root.handlers[:]
+    original_level = root.level
+    root.handlers.clear()
+    try:
+        logging.config.dictConfig(uvicorn.config.LOGGING_CONFIG)
+
+        create_app(settings, database=Database(settings.database_url), start_worker=False)
+
+        assert logging.getLogger("mistraldock.clients.mistral").isEnabledFor(logging.INFO)
+    finally:
+        root.handlers.clear()
+        root.handlers.extend(original_handlers)
+        root.setLevel(original_level)
 
 
 @pytest.mark.asyncio

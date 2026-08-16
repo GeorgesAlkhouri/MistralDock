@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import secrets
 from collections.abc import AsyncIterator
@@ -80,10 +81,16 @@ class Metrics:
         )
 
 
+def _configure_application_logging() -> None:
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO)
+
+
 def create_app(
     settings: Settings | None = None, *, database: Database | None = None, start_worker: bool = True
 ) -> FastAPI:
     """Create a MistralDock API instance with one optional in-process worker."""
+    _configure_application_logging()
     settings = settings or Settings()
     database = database or Database(settings.database_url)
     metrics = Metrics()
