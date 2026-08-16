@@ -6,6 +6,8 @@
     ":semanticCommits"
   ],
   "timezone": "Europe/Berlin",
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
   "enabledManagers": ["github-actions", "dockerfile", "pep621"],
   "packageRules": [
     {
