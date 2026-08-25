@@ -30,8 +30,8 @@ class FakeOcr:
 
     async def process_async(self, **kwargs: object) -> SimpleNamespace:
         response_format = kwargs.get("document_annotation_format")
-        if not hasattr(response_format, "json_schema"):
-            raise AssertionError("Mistral OCR calls require an SDK response format")
+        if not isinstance(response_format, dict) or response_format.get("type") != "json_schema":
+            raise AssertionError("Mistral OCR calls require a JSON schema response format")
         self.received_annotation_format = True
         return SimpleNamespace(
             pages=[SimpleNamespace(markdown="OCR page 1")],
@@ -100,3 +100,13 @@ async def test_mistral_consolidates_chunk_metadata() -> None:
     )
 
     assert result.title == "Vodafone – Vertrag"
+
+
+def test_mistral_v2_exposes_client_types_used_by_the_adapter() -> None:
+    """Keep imports aligned with the v2 SDK package layout."""
+    from mistralai.client import Mistral
+    from mistralai.client.errors import MistralError, NoResponseError
+
+    assert Mistral.__name__ == "Mistral"
+    assert issubclass(MistralError, Exception)
+    assert issubclass(NoResponseError, Exception)

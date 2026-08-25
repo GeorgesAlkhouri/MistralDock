@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Protocol
 
 import httpx
-from mistralai import MistralError, NoResponseError
+from mistralai.client.errors import MistralError, NoResponseError
 
 from mistraldock.clients.mistral import MistralProtocolError, OCRChunkResult, UploadedChunk
 from mistraldock.clients.paperless import PaperlessDocument, PaperlessProtocolError
