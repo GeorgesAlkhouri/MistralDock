@@ -1,0 +1,62 @@
+@startuml
+title 3 · Validation and Paperless Update
+
+hide footbox
+autonumber "<b>[00]"
+skinparam backgroundColor #FCFCFD
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Inter"
+skinparam defaultFontSize 14
+skinparam sequence {
+  ArrowColor #475569
+  ArrowFontColor #334155
+  ArrowFontSize 12
+  LifeLineBorderColor #94A3B8
+  ParticipantBorderColor #4F46E5
+  ParticipantBackgroundColor #EEF2FF
+  ParticipantFontColor #1E1B4B
+  GroupBorderColor #94A3B8
+  GroupBackgroundColor #F8FAFC
+  GroupHeaderFontColor #0F172A
+}
+
+control "DocumentProcessor" as Processor
+participant "Paperless-ngx" as Paperless
+control "Validation" as Validation
+control "Worker" as Worker
+database "Durable\nJob Store" as Store
+
+Processor -> Paperless : reload document snapshot
+Paperless --> Processor : current version and modified timestamp
+
+alt Document changed
+  Processor --> Worker : conflict result; no update
+else Document unchanged
+  Processor -> Paperless : load current tag vocabulary
+  Paperless --> Processor : visible tag vocabulary
+
+  Processor -> Validation : validate OCR, metadata, and tags
+  Validation --> Processor : safe update payload + warnings
+
+  alt Dry-run mode
+    Processor --> Worker : success; applied = false
+  else Live mode
+    Processor -> Paperless : one version-aware PATCH
+    Paperless --> Processor : update confirmed
+    Processor --> Worker : success; applied = true
+  end
+end
+
+Worker -> Store : persist final job and run state
+
+note over Worker,Store
+  Retry classification and backoff are deliberately omitted here.
+  Persisted proposals never contain OCR content.
+end note
+
+legend bottom
+  Source: services/processor.py · validation.py · worker.py · repository.py
+endlegend
+
+@enduml

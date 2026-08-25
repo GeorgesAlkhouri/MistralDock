@@ -1,0 +1,60 @@
+@startuml
+title 2 · OCR and Metadata Processing
+
+hide footbox
+autonumber "<b>[00]"
+skinparam backgroundColor #FCFCFD
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Inter"
+skinparam defaultFontSize 14
+skinparam sequence {
+  ArrowColor #475569
+  ArrowFontColor #334155
+  ArrowFontSize 12
+  LifeLineBorderColor #94A3B8
+  ParticipantBorderColor #4F46E5
+  ParticipantBackgroundColor #EEF2FF
+  ParticipantFontColor #1E1B4B
+  GroupBorderColor #94A3B8
+  GroupBackgroundColor #F8FAFC
+  GroupHeaderFontColor #0F172A
+}
+
+control "Worker" as Worker
+control "DocumentProcessor" as Processor
+participant "Paperless-ngx" as Paperless
+participant "Mistral Document AI" as Mistral
+
+Worker -> Processor : process claimed job
+activate Processor
+
+Processor -> Paperless : load document, tags, and original
+Paperless --> Processor : snapshot, tag vocabulary, document bytes
+
+Processor -> Processor : split PDF into bounded chunks
+
+loop Each chunk
+  Processor -> Mistral : upload and run OCR with metadata schema
+  Mistral --> Processor : ordered Markdown pages + metadata candidate
+  Processor -> Mistral : delete uploaded file
+end
+
+opt Multiple chunks
+  Processor -> Mistral : consolidate ordered metadata candidates
+  Mistral --> Processor : document-wide metadata
+end
+
+Processor -> Processor : assemble OCR in page order
+deactivate Processor
+
+note over Worker,Mistral
+  Failed provider-file deletion is retained for background cleanup.
+  Next: “3 · Validation and Paperless Update”.
+end note
+
+legend bottom
+  Source: services/processor.py · chunking.py · metadata.py · clients/*.py
+endlegend
+
+@enduml

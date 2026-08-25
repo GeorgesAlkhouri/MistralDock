@@ -13,6 +13,29 @@ It never reads the Paperless database or filesystem, creates no Paperless tags, 
 
 Large documents are processed chunk-by-chunk. No OCR text or document bytes are retained in the sidecar database, logs, metrics, or status API.
 
+## Architecture
+
+The component overview and the three processing flows below describe the current implementation. Click a diagram to open its scalable SVG at full size. The versioned PlantUML sources are kept alongside the rendered SVGs in [`docs/architecture`](docs/architecture/).
+
+[![MistralDock architecture overview](docs/architecture/overview.svg)](docs/architecture/overview.svg)
+
+<details>
+<summary>Processing flows</summary>
+
+### 1. Job intake and queueing
+
+[![Job intake and queueing](docs/architecture/sequence-01-job-intake.svg)](docs/architecture/sequence-01-job-intake.svg)
+
+### 2. OCR and metadata processing
+
+[![OCR and metadata processing](docs/architecture/sequence-02-ocr-metadata.svg)](docs/architecture/sequence-02-ocr-metadata.svg)
+
+### 3. Validation and Paperless update
+
+[![Validation and Paperless update](docs/architecture/sequence-03-validation-update.svg)](docs/architecture/sequence-03-validation-update.svg)
+
+</details>
+
 ## Quick start
 
 1. Create the persistent Docker network used by the existing Paperless Compose project, or change `paperless` in `compose.example.yml` to its actual network name.
