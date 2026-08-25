@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from mistralai import Mistral
+from mistralai.client import Mistral
 
 from mistraldock.services.chunking import DocumentChunk
 from mistraldock.services.metadata import (

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from mistralai import MistralError
+from mistralai.client.errors import MistralError
 from pypdf import PdfWriter
 
 from mistraldock.clients.mistral import OCRChunkResult, UploadedChunk
