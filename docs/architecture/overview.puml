@@ -1,0 +1,80 @@
+@startuml
+title MistralDock – Architecture Overview
+
+top to bottom direction
+skinparam backgroundColor #FCFCFD
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam linetype polyline
+skinparam nodesep 50
+skinparam ranksep 55
+skinparam defaultFontName "Inter"
+skinparam defaultFontSize 14
+skinparam ArrowColor #475569
+skinparam ArrowFontColor #334155
+skinparam ArrowFontSize 11
+skinparam component {
+  BackgroundColor #EEF2FF
+  BorderColor #4F46E5
+  FontColor #1E1B4B
+}
+skinparam database {
+  BackgroundColor #ECFDF5
+  BorderColor #059669
+  FontColor #064E3B
+}
+skinparam cloud {
+  BackgroundColor #F8FAFC
+  BorderColor #64748B
+  FontColor #0F172A
+}
+skinparam actor {
+  BorderColor #334155
+  FontColor #0F172A
+}
+skinparam node {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  FontColor #0F172A
+}
+
+actor "Paperless-ngx\nWorkflow" as Workflow
+actor "Operations" as Ops
+Workflow -[hidden]right-> Ops
+
+node "MistralDock OCI Container" as Dock {
+  component "HTTP API" as API
+  database "Durable Job Store\nSQLite (WAL)" as Store
+  component "Worker" as Worker
+  component "Document\nProcessing" as Processor
+  component "Paperless\nAdapter" as PAdapter
+  component "Mistral\nAdapter" as MAdapter
+
+  API -[hidden]down-> Store
+  Store -[hidden]right-> Worker
+  Worker -[hidden]down-> Processor
+  Processor -[hidden]down-> PAdapter
+  PAdapter -[hidden]right-> MAdapter
+}
+
+cloud "Paperless-ngx\nREST API v9" as Paperless
+cloud "Mistral Document AI\nOCR · Metadata" as Mistral
+Paperless -[hidden]right-> Mistral
+
+Workflow --> API : webhook
+Ops --> API : reprocess / status
+API --> Store : enqueue / read
+Worker --> Store : claim / outcome
+Worker --> Processor : process job
+Processor --> Store : remote-file tracking
+Processor --> PAdapter : documents / tags / update
+Processor --> MAdapter : OCR / metadata
+PAdapter --> Paperless
+MAdapter --> Mistral
+
+legend bottom
+  Source map: api.py · repository.py/models.py · services/worker.py
+  services/processor.py/chunking.py/validation.py · clients/*.py
+endlegend
+
+@enduml

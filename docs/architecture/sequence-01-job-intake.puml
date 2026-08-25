@@ -1,0 +1,53 @@
+@startuml
+title 1 · Job Intake and Queueing
+
+hide footbox
+autonumber "<b>[00]"
+skinparam backgroundColor #FCFCFD
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Inter"
+skinparam defaultFontSize 14
+skinparam sequence {
+  ArrowColor #475569
+  ArrowFontColor #334155
+  ArrowFontSize 12
+  LifeLineBorderColor #94A3B8
+  ParticipantBorderColor #4F46E5
+  ParticipantBackgroundColor #EEF2FF
+  ParticipantFontColor #1E1B4B
+  ActorBorderColor #334155
+  ActorFontColor #0F172A
+  DividerBackgroundColor #E2E8F0
+  DividerBorderColor #94A3B8
+}
+
+actor "Paperless-ngx\nWorkflow" as Workflow
+boundary "HTTP API" as API
+database "Durable\nJob Store" as Store
+control "Worker" as Worker
+
+Workflow -> API : POST document webhook
+activate API
+API -> Store : enqueue idempotently
+Store --> API : queued or existing job
+API --> Workflow : 202 Accepted
+deactivate API
+
+... asynchronous boundary ...
+
+loop Worker poll
+  Worker -> Store : claim next due job with lease
+  Store --> Worker : ClaimedJob or none
+end
+
+note over API,Worker
+  Manual reprocessing uses the same queue.
+  Next: “2 · OCR and Metadata Processing”.
+end note
+
+legend bottom
+  Source: api.py · repository.py · services/worker.py
+endlegend
+
+@enduml
