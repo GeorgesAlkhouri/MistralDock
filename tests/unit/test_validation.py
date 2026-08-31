@@ -48,12 +48,15 @@ def test_validated_update_omits_uncertain_date() -> None:
 
 
 def test_validated_update_rejects_generic_title() -> None:
+    metadata = DocumentMetadata(title="Rechnung", created=None, tags=[])
+    today = date(2026, 8, 15)
+
     with pytest.raises(MetadataValidationError, match="title"):
         build_validated_update(
-            metadata=DocumentMetadata(title="Rechnung", created=None, tags=[]),
+            metadata=metadata,
             content="Abrechnung",
             current_tag_ids=set(),
             tags_by_name={},
             original_filename="scan.pdf",
-            today=date(2026, 8, 15),
+            today=today,
         )

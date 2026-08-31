@@ -22,9 +22,8 @@ class FakeRepository:
         self.removed.append(provider_file_id)
 
     def reschedule_remote_file(
-        self, *, provider_file_id: str, now: datetime, next_attempt_at: datetime
+        self, *, provider_file_id: str, next_attempt_at: datetime
     ) -> None:
-        assert now is NOW
         self.rescheduled.append((provider_file_id, next_attempt_at))
 
 

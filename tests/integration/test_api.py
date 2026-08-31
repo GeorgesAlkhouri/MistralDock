@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import logging.config
+import stat
 from pathlib import Path
 
 import httpx
 import pytest
 import uvicorn.config
 
+from mistraldock import api
 from mistraldock.api import create_app
 from mistraldock.config import Settings
 from mistraldock.db import Database
@@ -59,6 +61,13 @@ def test_factory_enables_mistraldock_info_logs_under_uvicorn_defaults(settings: 
         root.handlers.clear()
         root.handlers.extend(original_handlers)
         root.setLevel(original_level)
+
+
+def test_worker_workspace_is_private_and_removed_after_use() -> None:
+    with api._worker_workspace() as workspace:
+        assert stat.S_IMODE(workspace.stat().st_mode) == 0o700
+
+    assert not workspace.exists()
 
 
 @pytest.mark.asyncio

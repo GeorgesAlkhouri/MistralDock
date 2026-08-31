@@ -24,7 +24,7 @@ class RemoteFileRepository(Protocol):
     def remove_remote_file(self, *, provider_file_id: str) -> None: ...
 
     def reschedule_remote_file(
-        self, *, provider_file_id: str, now: datetime, next_attempt_at: datetime
+        self, *, provider_file_id: str, next_attempt_at: datetime
     ) -> None: ...
 
 
@@ -47,7 +47,6 @@ async def cleanup_remote_files(
             delay = min(30 * (2**record.delete_attempts), 3600)
             repository.reschedule_remote_file(
                 provider_file_id=record.provider_file_id,
-                now=now,
                 next_attempt_at=now + timedelta(seconds=delay),
             )
         else:

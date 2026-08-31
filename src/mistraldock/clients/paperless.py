@@ -7,11 +7,22 @@ from pathlib import Path
 from typing import Self
 from urllib.parse import urljoin
 
+import anyio
 import httpx
 
 
 class PaperlessProtocolError(ValueError):
     """Paperless responded successfully but without data required by MistralDock."""
+
+
+def _parse_tag(tag: object) -> tuple[int, str]:
+    if not isinstance(tag, dict):
+        raise PaperlessProtocolError("invalid_tag")
+    tag_id = tag.get("id")
+    name = tag.get("name")
+    if not isinstance(tag_id, int) or not isinstance(name, str):
+        raise PaperlessProtocolError("invalid_tag")
+    return tag_id, name
 
 
 @dataclass(frozen=True)
@@ -83,14 +94,10 @@ class PaperlessClient:
             if not isinstance(results, list):
                 raise PaperlessProtocolError("invalid_tag_page")
             for tag in results:
-                if not isinstance(tag, dict) or not isinstance(tag.get("id"), int) or not isinstance(
-                    tag.get("name"), str
-                ):
-                    raise PaperlessProtocolError("invalid_tag")
-                name = tag["name"]
-                if name in tags_by_name and tags_by_name[name] != tag["id"]:
+                tag_id, name = _parse_tag(tag)
+                if name in tags_by_name and tags_by_name[name] != tag_id:
                     raise PaperlessProtocolError("duplicate_tag_name")
-                tags_by_name[name] = tag["id"]
+                tags_by_name[name] = tag_id
             next_value = data.get("next")
             if next_value is not None and not isinstance(next_value, str):
                 raise PaperlessProtocolError("invalid_tag_next")
@@ -103,9 +110,9 @@ class PaperlessClient:
             "GET", url, params={"original": "true", "version": document.version_id}
         ) as response:
             response.raise_for_status()
-            with destination.open("wb") as handle:
+            async with await anyio.open_file(destination, "wb") as handle:
                 async for chunk in response.aiter_bytes():
-                    handle.write(chunk)
+                    await handle.write(chunk)
 
     async def patch_document(self, document: PaperlessDocument, payload: dict[str, object]) -> None:
         response = await self._client.patch(

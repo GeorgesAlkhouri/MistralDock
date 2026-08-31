@@ -226,11 +226,11 @@ async def test_processor_marks_invalid_metadata_as_permanent_failure(tmp_path: P
         workspace_root=tmp_path,
         now=lambda: NOW,
     )
+    processor = DocumentProcessor(dependencies)
+    job = ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
 
     with pytest.raises(PermanentProcessingError, match="title"):
-        await DocumentProcessor(dependencies).process(
-            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
-        )
+        await processor.process(job)
 
 
 @pytest.mark.asyncio
@@ -243,11 +243,11 @@ async def test_processor_marks_paperless_forbidden_as_permanent_failure(tmp_path
         workspace_root=tmp_path,
         now=lambda: NOW,
     )
+    processor = DocumentProcessor(dependencies)
+    job = ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
 
     with pytest.raises(PermanentProcessingError, match="paperless_http_403"):
-        await DocumentProcessor(dependencies).process(
-            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
-        )
+        await processor.process(job)
 
 
 @pytest.mark.asyncio
@@ -261,11 +261,11 @@ async def test_processor_marks_mistral_unauthorized_as_permanent_failure(tmp_pat
         workspace_root=tmp_path,
         now=lambda: NOW,
     )
+    processor = DocumentProcessor(dependencies)
+    job = ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
 
     with pytest.raises(PermanentProcessingError, match="mistral_http_401"):
-        await DocumentProcessor(dependencies).process(
-            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
-        )
+        await processor.process(job)
 
 
 @pytest.mark.asyncio
@@ -279,11 +279,11 @@ async def test_processor_retries_mistral_server_errors(tmp_path: Path) -> None:
         workspace_root=tmp_path,
         now=lambda: NOW,
     )
+    processor = DocumentProcessor(dependencies)
+    job = ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
 
     with pytest.raises(RetryableProcessingError, match="mistral_http_503"):
-        await DocumentProcessor(dependencies).process(
-            ClaimedJob("job-1", "run-1", 42, TriggerKind.AUTOMATIC, 1)
-        )
+        await processor.process(job)
 
 
 @pytest.mark.asyncio

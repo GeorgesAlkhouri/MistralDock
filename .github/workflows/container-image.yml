@@ -17,6 +17,8 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
     permissions:
       contents: read
 
@@ -30,13 +32,13 @@ jobs:
           enable-cache: true
 
       - name: Install locked dependencies
-        run: uv sync --all-groups --frozen
+        run: uv sync --all-groups --frozen --no-build --no-install-project
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run --frozen --no-sync --no-build ruff check .
 
       - name: Test
-        run: uv run pytest -q
+        run: uv run --frozen --no-sync --no-build pytest -q
 
   container:
     runs-on: ubuntu-latest

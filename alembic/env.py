@@ -8,8 +8,13 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from mistraldock.models import Base
 
+_SQLALCHEMY_URL_OPTION = "sqlalchemy.url"
+
 config = context.config
-config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url")))
+config.set_main_option(
+    _SQLALCHEMY_URL_OPTION,
+    os.environ.get("DATABASE_URL", config.get_main_option(_SQLALCHEMY_URL_OPTION)),
+)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata
@@ -17,7 +22,9 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata, literal_binds=True
+        url=config.get_main_option(_SQLALCHEMY_URL_OPTION),
+        target_metadata=target_metadata,
+        literal_binds=True,
     )
     with context.begin_transaction():
         context.run_migrations()

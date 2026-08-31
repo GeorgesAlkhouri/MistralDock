@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
@@ -57,6 +58,12 @@ def _configure_application_logging() -> None:
         logging.basicConfig(level=logging.INFO)
 
 
+@contextmanager
+def _worker_workspace() -> Iterator[Path]:
+    with TemporaryDirectory(prefix="mistraldock-") as temporary_directory:
+        yield Path(temporary_directory)
+
+
 def create_app(
     settings: Settings | None = None, *, database: Database | None = None, start_worker: bool = True
 ) -> FastAPI:
@@ -96,7 +103,7 @@ def create_app(
     app = FastAPI(title="MistralDock", version=__version__, lifespan=lifespan)
     app.state.database = database
 
-    async def require_api_token(request: Request) -> None:
+    def require_api_token(request: Request) -> None:
         received = request.headers.get("Authorization", "")
         expected = f"Bearer {settings.mistraldock_api_token.get_secret_value()}"
         if not secrets.compare_digest(received, expected):
@@ -104,7 +111,6 @@ def create_app(
 
     @app.post(
         "/v1/webhooks/paperless",
-        response_model=QueueResponse,
         status_code=status.HTTP_202_ACCEPTED,
         dependencies=[Depends(require_api_token)],
     )
@@ -119,7 +125,6 @@ def create_app(
 
     @app.post(
         "/v1/documents/{document_id}/reprocess",
-        response_model=QueueResponse,
         status_code=status.HTTP_202_ACCEPTED,
         dependencies=[Depends(require_api_token)],
     )
@@ -134,7 +139,6 @@ def create_app(
 
     @app.get(
         "/v1/documents/{document_id}/runs",
-        response_model=RunsResponse,
         dependencies=[Depends(require_api_token)],
     )
     async def document_runs(document_id: PositiveInt) -> RunsResponse:
@@ -146,17 +150,16 @@ def create_app(
         return RunsResponse(document_id=document_id, runs=runs)
 
     @app.get("/health/live")
-    async def live() -> dict[str, str]:
+    def live() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get("/health/ready")
-    async def ready() -> dict[str, str]:
+    def ready() -> dict[str, str]:
         with database.engine.connect():
-            pass
-        return {"status": "ok"}
+            return {"status": "ok"}
 
     @app.get("/metrics")
-    async def metrics_endpoint() -> Response:
+    def metrics_endpoint() -> Response:
         return Response(generate_latest(metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
     return app
@@ -174,24 +177,25 @@ async def _worker_loop(
         try:
             now = datetime.now(UTC)
             await cleanup_remote_files(repository, mistral, now)
-            processor = DocumentProcessor(
-                ProcessorDependencies(
-                    settings=settings,
-                    paperless=paperless,
-                    mistral=mistral,
-                    remote_files=repository,
-                    workspace_root=Path("/tmp"),
-                    now=lambda: datetime.now(UTC),
+            with _worker_workspace() as workspace_root:
+                processor = DocumentProcessor(
+                    ProcessorDependencies(
+                        settings=settings,
+                        paperless=paperless,
+                        mistral=mistral,
+                        remote_files=repository,
+                        workspace_root=workspace_root,
+                        now=lambda: datetime.now(UTC),
+                    )
                 )
-            )
-            worker = Worker(
-                repository=repository,
-                processor=processor,
-                max_attempts=settings.max_attempts,
-                retry_base_seconds=settings.retry_base_seconds,
-                retry_max_seconds=settings.retry_max_seconds,
-            )
-            worked = await worker.run_once(now)
+                worker = Worker(
+                    repository=repository,
+                    processor=processor,
+                    max_attempts=settings.max_attempts,
+                    retry_base_seconds=settings.retry_base_seconds,
+                    retry_max_seconds=settings.retry_max_seconds,
+                )
+                worked = await worker.run_once(now)
         finally:
             repository.close()
         try:

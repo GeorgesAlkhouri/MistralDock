@@ -247,7 +247,7 @@ class JobRepository:
         ]
 
     def reschedule_remote_file(
-        self, *, provider_file_id: str, now: datetime, next_attempt_at: datetime
+        self, *, provider_file_id: str, next_attempt_at: datetime
     ) -> None:
         record = self._session.execute(
             select(RemoteFileRecord).where(RemoteFileRecord.provider_file_id == provider_file_id)
