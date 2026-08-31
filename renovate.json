@@ -28,8 +28,8 @@
       "allowedVersions": "/^3\\.13(?:\\.|-|$)/"
     },
     {
-      "description": "Automerge verified minor, patch, and digest updates",
-      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "description": "Automerge verified minor, patch, digest, and lock file updates",
+      "matchUpdateTypes": ["minor", "patch", "digest", "lockFileMaintenance"],
       "automerge": true,
       "automergeType": "pr"
     }
