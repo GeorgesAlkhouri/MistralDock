@@ -1,5 +1,7 @@
 # MistralDock
 
+[![SonarQube Cloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=GeorgesAlkhouri_MistralDock&metric=alert_status)](https://sonarcloud.io/summary/overall?id=GeorgesAlkhouri_MistralDock&branch=main)
+
 MistralDock is a small external [Mistral Document AI](https://docs.mistral.ai/studio-api/document-processing/basic_ocr) sidecar for [Paperless-ngx](https://docs.paperless-ngx.com/). It receives Paperless workflow webhooks, retrieves originals only through the Paperless REST API, and replaces `content` with Mistral OCR Markdown while safely proposing or writing `title`, `created`, and existing `tags`.
 
 It never reads the Paperless database or filesystem, creates no Paperless tags, changes no PDF, and starts in no-write dry-run mode.
