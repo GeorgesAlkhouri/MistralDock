@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from mistraldock.clients.paperless import PaperlessClient
+from mistraldock.clients.paperless import PaperlessClient, PaperlessProtocolError
 
 
 @pytest.mark.asyncio
@@ -32,6 +32,27 @@ async def test_paperless_lists_all_tag_pages_with_api_v9_header() -> None:
     assert tags == {"Invoice": 1, "Tax": 2}
     assert first.calls.last.request.headers["Accept"] == "application/json; version=9"
     assert first.calls.last.request.headers["Authorization"] == "Token token"
+
+
+@pytest.mark.asyncio
+async def test_paperless_rejects_tag_pagination_to_another_origin() -> None:
+    requested_urls: list[httpx.URL] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(request.url)
+        return httpx.Response(
+            200,
+            json={"results": [], "next": "https://attacker.example/capture"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client, PaperlessClient(
+        "https://paperless.example", "secret", api_version=9, client=http_client
+    ) as client:
+        with pytest.raises(PaperlessProtocolError, match="invalid_tag_next_origin"):
+            await client.list_tags()
+
+    assert requested_urls == [httpx.URL("https://paperless.example/api/tags/")]
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import anyio
 import httpx
@@ -101,7 +101,12 @@ class PaperlessClient:
             next_value = data.get("next")
             if next_value is not None and not isinstance(next_value, str):
                 raise PaperlessProtocolError("invalid_tag_next")
-            next_url = urljoin(self._base_url, next_value) if next_value else None
+            if next_value:
+                next_url = urljoin(self._base_url, next_value)
+                if _origin(next_url) != _origin(self._base_url):
+                    raise PaperlessProtocolError("invalid_tag_next_origin")
+            else:
+                next_url = None
         return tags_by_name
 
     async def download_original(self, document: PaperlessDocument, destination: Path) -> None:
@@ -124,3 +129,11 @@ class PaperlessClient:
 
     def _url(self, path: str) -> str:
         return urljoin(self._base_url, path)
+
+
+def _origin(url: str) -> tuple[str, str | None, int | None]:
+    parsed = urlsplit(url)
+    port = parsed.port
+    if port is None:
+        port = {"http": 80, "https": 443}.get(parsed.scheme.lower())
+    return parsed.scheme.lower(), parsed.hostname, port
