@@ -56,10 +56,10 @@ Required environment values are `PAPERLESS_URL`, `PAPERLESS_TOKEN`, `MISTRAL_API
 
 ## Container image
 
-Every successful push to `main` builds and publishes `ghcr.io/georgesalkhouri/mistraldock` with the `latest` tag and an immutable `sha-<commit>` tag. Pull a released image with:
+Every successful push to `main` builds and publishes `ghcr.io/georgesalkhouri/mistraldock` with the `main` tag and an immutable `sha-<commit>` tag. Pull a released image with:
 
 ```sh
-docker pull ghcr.io/georgesalkhouri/mistraldock:latest
+docker pull ghcr.io/georgesalkhouri/mistraldock:main
 ```
 
 The first published package may need to be made public from the repository's GitHub Packages settings before anonymous pulls are available.
