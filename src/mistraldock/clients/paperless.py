@@ -25,6 +25,25 @@ def _parse_tag(tag: object) -> tuple[int, str]:
     return tag_id, name
 
 
+def _merge_tags(results: list[object], tags_by_name: dict[str, int]) -> None:
+    for tag in results:
+        tag_id, name = _parse_tag(tag)
+        if name in tags_by_name and tags_by_name[name] != tag_id:
+            raise PaperlessProtocolError("duplicate_tag_name")
+        tags_by_name[name] = tag_id
+
+
+def _next_tag_url(base_url: str, next_value: object) -> str | None:
+    if next_value is not None and not isinstance(next_value, str):
+        raise PaperlessProtocolError("invalid_tag_next")
+    if not next_value:
+        return None
+    next_url = urljoin(base_url, next_value)
+    if _origin(next_url) != _origin(base_url):
+        raise PaperlessProtocolError("invalid_tag_next_origin")
+    return next_url
+
+
 @dataclass(frozen=True)
 class PaperlessDocument:
     document_id: int
@@ -93,20 +112,8 @@ class PaperlessClient:
             results = data.get("results")
             if not isinstance(results, list):
                 raise PaperlessProtocolError("invalid_tag_page")
-            for tag in results:
-                tag_id, name = _parse_tag(tag)
-                if name in tags_by_name and tags_by_name[name] != tag_id:
-                    raise PaperlessProtocolError("duplicate_tag_name")
-                tags_by_name[name] = tag_id
-            next_value = data.get("next")
-            if next_value is not None and not isinstance(next_value, str):
-                raise PaperlessProtocolError("invalid_tag_next")
-            if next_value:
-                next_url = urljoin(self._base_url, next_value)
-                if _origin(next_url) != _origin(self._base_url):
-                    raise PaperlessProtocolError("invalid_tag_next_origin")
-            else:
-                next_url = None
+            _merge_tags(results, tags_by_name)
+            next_url = _next_tag_url(self._base_url, data.get("next"))
         return tags_by_name
 
     async def download_original(self, document: PaperlessDocument, destination: Path) -> None:
