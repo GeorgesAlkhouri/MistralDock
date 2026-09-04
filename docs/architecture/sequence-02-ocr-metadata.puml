@@ -29,19 +29,22 @@ participant "Mistral Document AI" as Mistral
 Worker -> Processor : process claimed job
 activate Processor
 
-Processor -> Paperless : load document, tags, and original
-Paperless --> Processor : snapshot, tag vocabulary, document bytes
+Processor -> Paperless : load document and original
+Paperless --> Processor : document snapshot, document bytes
+Processor -> Paperless : load service-visible tag pages
+Paperless --> Processor : tag pages
+Processor -> Processor : retain tags owned by document owner only
 
 Processor -> Processor : split PDF into bounded chunks
 
 loop Each chunk
-  Processor -> Mistral : upload and run OCR with metadata schema
+  Processor -> Mistral : upload and run OCR with owner-scoped tag vocabulary
   Mistral --> Processor : ordered Markdown pages + metadata candidate
   Processor -> Mistral : delete uploaded file
 end
 
 opt Multiple chunks
-  Processor -> Mistral : consolidate ordered metadata candidates
+  Processor -> Mistral : consolidate candidates with owner-scoped tag vocabulary
   Mistral --> Processor : document-wide metadata
 end
 

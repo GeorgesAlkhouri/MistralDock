@@ -15,19 +15,28 @@ class PaperlessProtocolError(ValueError):
     """Paperless responded successfully but without data required by MistralDock."""
 
 
-def _parse_tag(tag: object) -> tuple[int, str]:
+def _parse_tag(tag: object) -> tuple[int, str, int | None]:
     if not isinstance(tag, dict):
         raise PaperlessProtocolError("invalid_tag")
     tag_id = tag.get("id")
     name = tag.get("name")
-    if not isinstance(tag_id, int) or not isinstance(name, str):
+    if "owner" not in tag:
         raise PaperlessProtocolError("invalid_tag")
-    return tag_id, name
+    owner_id = tag["owner"]
+    if (
+        not isinstance(tag_id, int)
+        or not isinstance(name, str)
+        or (owner_id is not None and type(owner_id) is not int)
+    ):
+        raise PaperlessProtocolError("invalid_tag")
+    return tag_id, name, owner_id
 
 
-def _merge_tags(results: list[object], tags_by_name: dict[str, int]) -> None:
+def _merge_tags(results: list[object], tags_by_name: dict[str, int], owner_id: int) -> None:
     for tag in results:
-        tag_id, name = _parse_tag(tag)
+        tag_id, name, tag_owner_id = _parse_tag(tag)
+        if tag_owner_id != owner_id:
+            continue
         if name in tags_by_name and tags_by_name[name] != tag_id:
             raise PaperlessProtocolError("duplicate_tag_name")
         tags_by_name[name] = tag_id
@@ -48,6 +57,7 @@ def _next_tag_url(base_url: str, next_value: object) -> str | None:
 class PaperlessDocument:
     document_id: int
     tags: frozenset[int]
+    owner_id: int | None
     modified: str
     original_filename: str
     version_id: int
@@ -91,18 +101,24 @@ class PaperlessClient:
         tags = data.get("tags")
         if not isinstance(tags, list) or not all(isinstance(tag, int) for tag in tags):
             raise PaperlessProtocolError("invalid_document_tags")
+        if "owner" not in data:
+            raise PaperlessProtocolError("invalid_document_owner")
+        owner_id = data["owner"]
+        if owner_id is not None and type(owner_id) is not int:
+            raise PaperlessProtocolError("invalid_document_owner")
         for field in ("modified", "original_file_name"):
             if not isinstance(data.get(field), str):
                 raise PaperlessProtocolError(f"missing_{field}")
         return PaperlessDocument(
             document_id=document_id,
             tags=frozenset(tags),
+            owner_id=owner_id,
             modified=data["modified"],
             original_filename=data["original_file_name"],
             version_id=version_id,
         )
 
-    async def list_tags(self) -> dict[str, int]:
+    async def list_tags(self, owner_id: int) -> dict[str, int]:
         tags_by_name: dict[str, int] = {}
         next_url: str | None = self._url("api/tags/")
         while next_url is not None:
@@ -112,7 +128,7 @@ class PaperlessClient:
             results = data.get("results")
             if not isinstance(results, list):
                 raise PaperlessProtocolError("invalid_tag_page")
-            _merge_tags(results, tags_by_name)
+            _merge_tags(results, tags_by_name, owner_id)
             next_url = _next_tag_url(self._base_url, data.get("next"))
         return tags_by_name
 

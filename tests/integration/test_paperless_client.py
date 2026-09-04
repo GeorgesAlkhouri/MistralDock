@@ -11,15 +11,25 @@ from mistraldock.clients.paperless import PaperlessClient, PaperlessProtocolErro
 
 
 @pytest.mark.asyncio
-async def test_paperless_lists_all_tag_pages_with_api_v9_header() -> None:
+async def test_paperless_lists_only_tags_owned_by_document_owner() -> None:
     router = respx.Router(assert_all_mocked=True)
     router.get("https://paperless.example/api/tags/", params={"page": "2"}).respond(
-        200, json={"results": [{"id": 2, "name": "Tax"}], "next": None}
+        200,
+        json={
+            "results": [
+                {"id": 2, "name": "Contracts", "owner": 17},
+                {"id": 3, "name": "Other user's tag", "owner": 23},
+            ],
+            "next": None,
+        },
     )
     first = router.get("https://paperless.example/api/tags/").respond(
         200,
         json={
-            "results": [{"id": 1, "name": "Invoice"}],
+            "results": [
+                {"id": 1, "name": "Invoices", "owner": 17},
+                {"id": 4, "name": "Shared without owner", "owner": None},
+            ],
             "next": "https://paperless.example/api/tags/?page=2",
         },
     )
@@ -27,9 +37,9 @@ async def test_paperless_lists_all_tag_pages_with_api_v9_header() -> None:
     async with httpx.AsyncClient(transport=transport) as http_client, PaperlessClient(
         "https://paperless.example", "token", api_version=9, client=http_client
     ) as client:
-        tags = await client.list_tags()
+        tags = await client.list_tags(17)
 
-    assert tags == {"Invoice": 1, "Tax": 2}
+    assert tags == {"Invoices": 1, "Contracts": 2}
     assert first.calls.last.request.headers["Accept"] == "application/json; version=9"
     assert first.calls.last.request.headers["Authorization"] == "Token token"
 
@@ -50,9 +60,58 @@ async def test_paperless_rejects_tag_pagination_to_another_origin() -> None:
         "https://paperless.example", "secret", api_version=9, client=http_client
     ) as client:
         with pytest.raises(PaperlessProtocolError, match="invalid_tag_next_origin"):
-            await client.list_tags()
+            await client.list_tags(17)
 
     assert requested_urls == [httpx.URL("https://paperless.example/api/tags/")]
+
+
+@pytest.mark.asyncio
+async def test_paperless_rejects_tag_with_invalid_owner() -> None:
+    router = respx.Router(assert_all_mocked=True)
+    router.get("https://paperless.example/api/tags/").respond(
+        200, json={"results": [{"id": 1, "name": "Invoices", "owner": "17"}], "next": None}
+    )
+    transport = httpx.MockTransport(router.async_handler)
+    async with httpx.AsyncClient(transport=transport) as http_client, PaperlessClient(
+        "https://paperless.example", "token", api_version=9, client=http_client
+    ) as client:
+        with pytest.raises(PaperlessProtocolError, match="invalid_tag"):
+            await client.list_tags(17)
+
+
+@pytest.mark.asyncio
+async def test_paperless_rejects_tag_without_owner() -> None:
+    router = respx.Router(assert_all_mocked=True)
+    router.get("https://paperless.example/api/tags/").respond(
+        200, json={"results": [{"id": 1, "name": "Invoices"}], "next": None}
+    )
+    transport = httpx.MockTransport(router.async_handler)
+    async with httpx.AsyncClient(transport=transport) as http_client, PaperlessClient(
+        "https://paperless.example", "token", api_version=9, client=http_client
+    ) as client:
+        with pytest.raises(PaperlessProtocolError, match="invalid_tag"):
+            await client.list_tags(17)
+
+
+@pytest.mark.asyncio
+async def test_paperless_rejects_document_without_owner() -> None:
+    router = respx.Router(assert_all_mocked=True)
+    router.get("https://paperless.example/api/documents/42/").respond(
+        200,
+        json={
+            "id": 42,
+            "tags": [4],
+            "modified": "2026-08-15T12:00:00Z",
+            "original_file_name": "scan.pdf",
+            "versions": [{"id": 7}],
+        },
+    )
+    transport = httpx.MockTransport(router.async_handler)
+    async with httpx.AsyncClient(transport=transport) as http_client, PaperlessClient(
+        "https://paperless.example", "token", api_version=9, client=http_client
+    ) as client:
+        with pytest.raises(PaperlessProtocolError, match="invalid_document_owner"):
+            await client.get_document(42)
 
 
 @pytest.mark.asyncio
@@ -65,6 +124,7 @@ async def test_paperless_downloads_original_version_and_patches_same_version(
         json={
             "id": 42,
             "tags": [4],
+            "owner": 17,
             "modified": "2026-08-15T12:00:00Z",
             "original_file_name": "scan.pdf",
             "versions": [{"id": 7}],
@@ -90,3 +150,4 @@ async def test_paperless_downloads_original_version_and_patches_same_version(
     )
     assert patch.calls.last.request.url.params == httpx.QueryParams({"version": "7"})
     assert json.loads(patch.calls.last.request.content) == {"title": "Archivierter Titel"}
+    assert document.owner_id == 17
