@@ -9,7 +9,7 @@ It never reads the Paperless database or filesystem, creates no Paperless tags, 
 ## What it does
 
 1. Paperless emits a **Document Added** webhook with the document ID.
-2. MistralDock downloads the original and the currently visible Paperless tags through official APIs.
+2. MistralDock downloads the original and the currently visible Paperless tags through official APIs, then retains only tags owned by the document owner for Mistral.
 3. PDFs are split into bounded page chunks; each is OCRed with Mistral and its structured document annotations.
 4. MistralDock validates OCR and metadata, preserves existing tags, and performs one version-aware Paperless update only in `WRITE_MODE=live`.
 
@@ -69,9 +69,9 @@ The first published package may need to be made public from the repository's Git
 Create a dedicated Paperless user/token with these minimum global permissions and object access:
 
 - View and change the target Paperless documents;
-- View all tags that MistralDock may select.
+- View all tags that MistralDock must inspect for owner-scoped selection.
 
-The account must be able to see those particular documents and tags through Paperless object-level permissions; an API call returning zero documents/tags cannot process or classify anything.
+The account must be able to see those particular documents and tags through Paperless object-level permissions; an API call returning zero documents/tags cannot process or classify anything. Before calling Mistral, MistralDock retains only tags whose owner exactly matches the document owner. Ownerless documents receive no tag vocabulary and never get new tags; their existing tags are preserved.
 
 Create a Paperless **Document Added** workflow action:
 

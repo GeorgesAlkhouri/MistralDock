@@ -28,13 +28,14 @@ control "Worker" as Worker
 database "Durable\nJob Store" as Store
 
 Processor -> Paperless : reload document snapshot
-Paperless --> Processor : current version and modified timestamp
+Paperless --> Processor : current version, modified timestamp, and owner
 
-alt Document changed
+alt Document or owner changed
   Processor --> Worker : conflict result; no update
 else Document unchanged
-  Processor -> Paperless : load current tag vocabulary
-  Paperless --> Processor : visible tag vocabulary
+  Processor -> Paperless : load current service-visible tag pages
+  Paperless --> Processor : tag pages
+  Processor -> Processor : retain tags owned by document owner only
 
   Processor -> Validation : validate OCR, metadata, and tags
   Validation --> Processor : safe update payload + warnings

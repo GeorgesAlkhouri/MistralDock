@@ -44,7 +44,7 @@ class PermanentProcessingError(ProcessingError):
 class PaperlessGateway(Protocol):
     async def get_document(self, document_id: int) -> PaperlessDocument: ...
 
-    async def list_tags(self) -> dict[str, int]: ...
+    async def list_tags(self, owner_id: int) -> dict[str, int]: ...
 
     async def download_original(self, document: PaperlessDocument, destination: Path) -> None: ...
 
@@ -117,7 +117,7 @@ class DocumentProcessor:
 
     async def _process(self, job: ClaimedJob) -> ProcessResult:
         original = await self._dependencies.paperless.get_document(job.document_id)
-        initial_tags = await self._dependencies.paperless.list_tags()
+        initial_tags = await self._tags_for_owner(original.owner_id)
         self._dependencies.workspace_root.mkdir(parents=True, exist_ok=True)
         with TemporaryDirectory(dir=self._dependencies.workspace_root) as temporary_directory:
             workspace = Path(temporary_directory)
@@ -131,9 +131,13 @@ class DocumentProcessor:
         content = "\n\n".join(result.markdown for result in results)
         metadata = await self._metadata_for(results, chunks, sorted(initial_tags))
         fresh = await self._dependencies.paperless.get_document(job.document_id)
-        if fresh.version_id != original.version_id or fresh.modified != original.modified:
+        if (
+            fresh.version_id != original.version_id
+            or fresh.modified != original.modified
+            or fresh.owner_id != original.owner_id
+        ):
             return ProcessResult(JobState.CONFLICT, applied=False, error_code="document_changed")
-        current_tags = await self._dependencies.paperless.list_tags()
+        current_tags = await self._tags_for_owner(fresh.owner_id)
         try:
             update = build_validated_update(
                 metadata=metadata,
@@ -159,6 +163,11 @@ class DocumentProcessor:
             payload=update.payload,
             warnings=update.warnings,
         )
+
+    async def _tags_for_owner(self, owner_id: int | None) -> dict[str, int]:
+        if owner_id is None:
+            return {}
+        return await self._dependencies.paperless.list_tags(owner_id)
 
     async def _ocr_chunk(
         self, job: ClaimedJob, chunk: DocumentChunk, vocabulary: list[str]
