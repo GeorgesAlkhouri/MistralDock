@@ -1,37 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:best-practices",
-    ":dependencyDashboard",
-    ":semanticCommits"
+    "github>georgesalkhouri/renovate-config",
+    "github>georgesalkhouri/renovate-config:python(3.13)",
+    "github>georgesalkhouri/renovate-config:docker"
   ],
-  "timezone": "Europe/Berlin",
-  "prHourlyLimit": 0,
-  "prConcurrentLimit": 0,
-  "enabledManagers": ["github-actions", "dockerfile", "pep621"],
-  "packageRules": [
-    {
-      "description": "Wait seven days before updating third-party dependencies",
-      "matchPackageNames": ["*"],
-      "minimumReleaseAge": "7 days"
-    },
-    {
-      "description": "Restrict Python updates to the 3.13 release line",
-      "matchManagers": ["pep621"],
-      "matchPackageNames": ["python"],
-      "allowedVersions": ">=3.13,<3.14"
-    },
-    {
-      "description": "Restrict the Python Docker image to the 3.13 release line",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["python"],
-      "allowedVersions": "/^3\\.13(?:\\.|-|$)/"
-    },
-    {
-      "description": "Automerge verified minor, patch, digest, and lock file updates",
-      "matchUpdateTypes": ["minor", "patch", "digest", "lockFileMaintenance"],
-      "automerge": true,
-      "automergeType": "pr"
-    }
-  ]
+  "enabledManagers": ["github-actions", "dockerfile", "pep621"]
 }
