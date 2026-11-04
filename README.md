@@ -112,4 +112,4 @@ Never commit `.env` files, API keys, Paperless tokens, OCR text, or source docum
 
 ## License
 
-MistralDock is released under the [MIT License](LICENSE).
+MistralDock is released under the [GNU General Public License v3.0](LICENSE) (GPL-3.0).
